@@ -1,0 +1,17 @@
+{
+    "data": {
+      "signals_csv_path": "data/raw_data/signals_lightweight.csv",
+      "quotes_csv_path": "data/raw_data/quotes_lightweight.csv",
+      "signals_validated_csv_path":"data/processed_data/signals_lightweight_validated.csv",
+      "quotes_validated_csv_path":"data/processed_data/quotes_lightweight_validated.csv",
+      "matched_csv_path":"data/processed_data/matched.csv"
+    },
+    "output": {
+        "log_file_path":"output/logs/output.log"
+    },
+    "simulation": {
+      "strength_threshold":0.5,
+      "latency_in_secs":1,
+      "open_order_size":1
+  }
+  }
