@@ -121,3 +121,17 @@ class RealTimePnL:
             'total_short_pos':self.total_short_position_size,
             'net_position': self.total_long_position_size - self.total_short_position_size
         }
+    
+
+
+
+def compute_equity_and_drawdown(realized_pnl, unrealized_pnl):
+    realized_pnl = np.array(realized_pnl, dtype=float)
+    unrealized_pnl = np.array(unrealized_pnl, dtype=float)
+    equity = realized_pnl + unrealized_pnl
+    running_max = np.maximum.accumulate(equity)
+    drawdown = np.where(running_max > 0, (equity - running_max) / running_max, 0.0)
+    max_dd = drawdown.min()
+    return equity, drawdown, max_dd
+
+

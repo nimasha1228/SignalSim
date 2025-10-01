@@ -2,8 +2,6 @@ import pandas as pd
 from logger_config import logger, log_blank_line
 
 
-
-
 def classify_signal(strength, threshold):
     if strength > threshold:
         return "Buy"

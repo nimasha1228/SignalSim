@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as numpy
 from pathlib import Path
+import os
 from logger_config import logger, log_blank_line
+from plotting import plot_spread_distribution
+
 
 
 def validate_signals(signals_csv_path, quotes_csv_path, signals_validated_csv_path):
@@ -58,8 +61,7 @@ def validate_signals(signals_csv_path, quotes_csv_path, signals_validated_csv_pa
 
 
 
-def validate_quotes(quotes_csv_path, quotes_validated_csv_path):
-
+def validate_quotes(quotes_csv_path, quotes_validated_csv_path, k, plots_saving_path):
 
     logger.info("-------- Quote Data Validation Report --------")
     logger.info("==============================================")
@@ -132,7 +134,9 @@ def validate_quotes(quotes_csv_path, quotes_validated_csv_path):
 
     # -----------------------------------Spread threshold------------------------------------------------
     spread = (quotes_raw_df['ask_price'] - quotes_raw_df['bid_price']) / quotes_raw_df['bid_price']
-    spread_threshold = spread.quantile(0.99)
+    mean = spread.mean()
+    std = spread.std()
+    spread_threshold = mean + k * std   # flag anything > k standard deviations away
 
     # Add a flag column for spread validation
     quotes_raw_df['spread_flag'] = (spread > spread_threshold).astype(int)  # 1 = flagged, 0 = valid
@@ -144,6 +148,8 @@ def validate_quotes(quotes_csv_path, quotes_validated_csv_path):
     else:
         logger.info(f"PASS: No rows with spread > {spread_threshold:.6f} found.")
 
+    save_path = os.path.join(plots_saving_path, "spread_distribution.png")
+    plot_spread_distribution(spread, mean, k, spread_threshold, save_path)
 
 
     # -----------------------------------Positive Volume Check---------------------------------------------

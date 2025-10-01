@@ -6,8 +6,13 @@
       "quotes_validated_csv_path":"data/processed_data/quotes_lightweight_validated.csv",
       "matched_csv_path":"data/processed_data/matched.csv"
     },
+    "validation": {
+      "k":3
+  },
     "output": {
-        "log_file_path":"output/logs/output.log"
+        "log_file_path":"output/logs/output.log",
+        "plots":"output/plots/",
+        "results_csv":"output/csvs/"
     },
     "simulation": {
       "strength_threshold":0.5,
