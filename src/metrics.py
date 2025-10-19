@@ -125,13 +125,71 @@ class RealTimePnL:
 
 
 
-def compute_equity_and_drawdown(realized_pnl, unrealized_pnl):
-    realized_pnl = np.array(realized_pnl, dtype=float)
-    unrealized_pnl = np.array(unrealized_pnl, dtype=float)
-    equity = realized_pnl + unrealized_pnl
-    running_max = np.maximum.accumulate(equity)
-    drawdown = np.where(running_max > 0, (equity - running_max) / running_max, 0.0)
-    max_dd = drawdown.min()
-    return equity, drawdown, max_dd
+def calculate_max_drawdown(df, gross_pnl_col="gross_pnl_per_trade", slippage_col="slippage"):
+    net_pnl = df[gross_pnl_col].to_numpy(dtype=float) - np.abs(df[slippage_col].to_numpy(dtype=float))
+    cum_pnl = np.cumsum(net_pnl)
+
+    running_max = np.maximum.accumulate(cum_pnl)
+    drawdown = cum_pnl - running_max
+
+    max_drawdown = drawdown.min()
+
+    return float(max_drawdown)
 
 
+
+def compute_gross_and_net_pnl(df, pnl_col="total_pnl", slippage_col="slippage"):
+    """
+    Compute Gross and Net PnL over the entire simulation period (including holding times).
+    """
+
+    # --- Gross PnL: total profit over time ---
+    gross_pnl = df[pnl_col].iloc[-1] - df[pnl_col].iloc[0]
+
+    # --- Total slippage cost: only for executed trades ---
+    total_slippage_cost = df.loc[df["traded_or_not"] == 1, slippage_col].abs().sum()
+
+    # --- Net PnL: gross minus total slippage ---
+    net_pnl = gross_pnl - total_slippage_cost
+
+    print(f"💰 Gross PnL (including holds): {gross_pnl:.6f}")
+    print(f"📉 Total Slippage Cost (executed only): {total_slippage_cost:.6f}")
+    print(f"✅ Net PnL after Slippage: {net_pnl:.6f}")
+
+    return float(gross_pnl), float(net_pnl)
+
+
+
+def calculate_average_trade_pnl(df, realized_pnl_col="realized_pnl", trade_flag_col="traded_or_not"):
+    """
+    Calculate average realized PnL per executed trade.
+    """
+    executed = df[df[trade_flag_col] == 1]
+    if executed.empty:
+        print("⚠️ No executed trades found.")
+        return 0.0, 0
+
+    avg_trade_pnl = executed[realized_pnl_col].mean()
+    trade_count = len(executed)
+
+    print(f"📊 Executed Trades: {trade_count}")
+    print(f"💰 Average Trade PnL: {avg_trade_pnl:.6f}")
+
+    return float(avg_trade_pnl), trade_count
+
+
+def calculate_average_slippage(df, slippage_col="slippage", trade_flag_col="traded_or_not"):
+    """
+    Calculate average slippage per executed trade.
+    """
+    executed = df[df[trade_flag_col] == 1]
+    if executed.empty:
+        print("⚠️ No executed trades found.")
+        return 0.0, 0
+
+    avg_slippage = executed[slippage_col].abs().mean()
+
+    print(f"📊 Executed Trades: {trade_count}")
+    print(f"📉 Average Slippage per Trade: {avg_slippage:.6f}")
+
+    return float(avg_slippage)

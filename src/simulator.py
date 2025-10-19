@@ -18,6 +18,7 @@ def order_generator(signal, best_bid_price, best_ask_price, long_position, short
 
     net_position = long_position - short_position
 
+    # Order send assumption: always send close orders first
     # --- BUY signal ---
     if signal == 1:
         logger.info("BUY signal detected.")
@@ -56,6 +57,7 @@ def order_generator(signal, best_bid_price, best_ask_price, long_position, short
         logger.info("Waiting for the next signal...")
 
     return {
+        "signal":signal,
         "open_long_size": open_long_size,
         "close_long_size": close_long_size,
         "open_short_size": open_short_size,
@@ -66,7 +68,7 @@ def order_generator(signal, best_bid_price, best_ask_price, long_position, short
 
 
 
-def simulation(trader_df, open_order_size, pnl_obj):
+def simulation(trader_df, open_order_size, pnl_obj, spread_penalty_factor, cb, ca, min_price_aggressiveness, min_exec_prob_threshold):
 
     exchange_df = deepcopy(trader_df)
 
@@ -80,7 +82,11 @@ def simulation(trader_df, open_order_size, pnl_obj):
     short_position = 0
     log_records = []
 
-    data_end_time = timestamps.max() 
+    # data_end_time = timestamps.max() 
+    num_of_trades = 0
+    buy_signal_count = (trader_df["action_int"] == 1).sum()
+    sell_signal_count = (trader_df["action_int"] == -1).sum()
+    total_received_signal_count = buy_signal_count + sell_signal_count
 
     for ts, best_bid_price, best_ask_price, signal in zip(timestamps, bid_prices, ask_prices, signals):
 
@@ -91,14 +97,16 @@ def simulation(trader_df, open_order_size, pnl_obj):
         close_long_size = order_dict["close_long_size"]
         open_short_size = order_dict["open_short_size"]
         close_short_size = order_dict["close_short_size"]
-        order_type = order_dict["order_type"]
         sent_order_price = order_dict["sent_order_price"]
+        signal = order_dict["signal"]
         
 
-        # Order send assumption: always send close orders first
+        
         # ====================== EXCHANGE ===============================================================
 
+        # Checking whether any orders have been received
         order_generated = open_long_size>0 or close_long_size>0 or open_short_size>0 or close_short_size>0
+
         exec_time = order_sent_time + np.timedelta64(1, "s") 
         matched_event = exchange_df.loc[exchange_df["timestamp"] == exec_time]
 
@@ -114,33 +122,46 @@ def simulation(trader_df, open_order_size, pnl_obj):
 
             filled_open_long_size = filled_close_long_size = filled_open_short_size = filled_close_short_size = 0
 
-            close_long_sent_price = 0
-            close_long_fill_price = 0
-            close_short_sent_price = 0
-            close_short_fill_price = 0
-            open_short_sent_price = 0
-            open_short_fill_price = 0
-            open_long_sent_price = 0
-            open_long_fill_price = 0
+            close_long_sent_price = 0.0
+            close_long_fill_price = 0.0
+            close_short_sent_price = 0.0
+            close_short_fill_price = 0.0
+            open_short_sent_price = 0.0
+            open_short_fill_price = 0.0
+            open_long_sent_price = 0.0
+            open_long_fill_price = 0.0
+
+            prob_exec = 0.0
+            price_aggressiveness = 0.0
 
             market_ask_price = matched_event["ask_price"].iloc[0]
             market_bid_price = matched_event["bid_price"].iloc[0]
             available_ask_qty = matched_event["ask_qty"].iloc[0]
             available_bid_qty = matched_event["bid_qty"].iloc[0]
+            spread_flag = matched_event["spread_flag"].iloc[0]
+            
+            traded = 0
+            slippage = 0.0 
 
-            if order_generated :
+            if order_generated:
 
                 if close_long_size>0: # ask
                     if sent_order_price <= market_bid_price:
 
                         logger.info(f"Exchange received close_long order: {close_long_size} unit(s) @{sent_order_price:.2f}.")
                 
-                        # Compute execution probability
-                        price_aggressiveness = max((market_bid_price - sent_order_price) / market_bid_price, 0.01)
-                        liquidity_factor = min(available_bid_qty / close_long_size, 1.0)
-                        prob_exec = (0.5 * price_aggressiveness) + (0.5 * liquidity_factor)
+                        # --- Mid-price and slippage ---
+                        mid_price = (market_bid_price + market_ask_price) / 2
 
-                        if prob_exec >= 0.08 and available_bid_qty > 0:
+                        # Compute execution probability
+                        price_aggressiveness = (((1-min_price_aggressiveness)*(sent_order_price))+(market_bid_price*((min_price_aggressiveness*cb)-1)))/(market_bid_price*(cb-1))
+                        price_aggressiveness = np.clip(price_aggressiveness, 0, 1.0)
+                        penalty = spread_penalty_factor if spread_flag == 1 else 1.0
+                        prob_exec = penalty * price_aggressiveness
+
+                        # if prob_exec >= min_exec_prob_threshold and available_bid_qty > 0:
+                        rand_val = np.random.random()
+                        if rand_val < prob_exec and available_bid_qty > 0:
 
                             logger.info(f"close_long order FILLED: {close_long_size} unit(s) @{market_bid_price:.2f} ")
 
@@ -149,8 +170,14 @@ def simulation(trader_df, open_order_size, pnl_obj):
                             close_long_sent_price = sent_order_price
                             close_long_fill_price = market_bid_price
 
+                            slippage =  close_long_fill_price - close_long_sent_price # Sell side
+
+                            traded = 1
+                            
                         else:
                             logger.info(f"close_long order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_bid_qty}).")   
+                    else:
+                        logger.info(f"close_long order NOT FILLED: sent_order_price({sent_order_price}) > market_bid_price({market_bid_price})")
 
 
                 if close_short_size>0: # bid
@@ -158,12 +185,18 @@ def simulation(trader_df, open_order_size, pnl_obj):
 
                         logger.info(f"Exchange received close_short order: {close_short_size} unit(s) @ {sent_order_price:.2f}")
 
-                        # Compute execution probability
-                        price_aggressiveness = max((sent_order_price - market_ask_price) / market_ask_price, 0.01)
-                        liquidity_factor = min(available_ask_qty / close_short_size, 1.0)
-                        prob_exec = (0.5 * price_aggressiveness) + (0.5 * liquidity_factor)
+                        # --- Mid-price and slippage ---
+                        mid_price = (market_bid_price + market_ask_price) / 2
 
-                        if prob_exec >= 0.08 and available_ask_qty > 0:
+                        # Compute execution probability
+                        price_aggressiveness = (((1 - min_price_aggressiveness) * sent_order_price) + (market_ask_price * ((min_price_aggressiveness * ca) - 1)))/(market_ask_price * (ca - 1))
+                        price_aggressiveness = np.clip(price_aggressiveness, 0, 1.0)
+                        penalty = spread_penalty_factor if spread_flag == 1 else 1.0
+                        prob_exec = penalty * price_aggressiveness
+
+                        # if prob_exec >= min_exec_prob_threshold and available_ask_qty > 0:
+                        rand_val = np.random.random()
+                        if rand_val < prob_exec and available_ask_qty > 0:
 
                             logger.info(f"close_short order FILLED: {close_short_size} unit(s) @{market_ask_price:.2f}")
 
@@ -171,22 +204,36 @@ def simulation(trader_df, open_order_size, pnl_obj):
                             available_ask_qty = available_ask_qty - filled_close_short_size
                             close_short_sent_price = sent_order_price
                             close_short_fill_price = market_ask_price
+
+                            slippage = close_short_sent_price - close_short_fill_price # Buy side
+
+                            traded = 1
+
                         else:    
                             logger.info(f"close_short order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_ask_qty}).")
+                    else:
+                        logger.info(f"close_long order NOT FILLED: sent_order_price({sent_order_price}) < market_ask_price({market_ask_price})")
 
 
-
+                
                 if open_short_size>0: # ask
                     if sent_order_price <= market_bid_price:
 
                         logger.info(f"Exchange received open_short order: {open_short_size} unit(s) @ {sent_order_price:.2f}")
 
-                        # Compute execution probability
-                        price_aggressiveness = max((market_bid_price - sent_order_price) / market_bid_price, 0.01)
-                        liquidity_factor = min(available_bid_qty / open_short_size, 1.0)
-                        prob_exec = (0.5 * price_aggressiveness) + (0.5 * liquidity_factor)
+                        # --- Mid-price and slippage ---
+                        mid_price = (market_bid_price + market_ask_price) / 2
 
-                        if prob_exec >= 0.08 and available_bid_qty > 0:
+                        # Compute execution probability
+                        price_aggressiveness = (((1-min_price_aggressiveness)*(sent_order_price))+(market_bid_price*((min_price_aggressiveness*cb)-1)))/(market_bid_price*(cb-1))
+                        price_aggressiveness = np.clip(price_aggressiveness, 0, 1.0)
+                        penalty = spread_penalty_factor if spread_flag == 1 else 1.0
+                        prob_exec = penalty * price_aggressiveness
+
+
+                        # if prob_exec >= min_exec_prob_threshold and available_bid_qty > 0:
+                        rand_val = np.random.random()
+                        if rand_val < prob_exec and available_bid_qty > 0:
 
                             logger.info(f"open_short order FILLED: {open_short_size} unit(s) @ {market_bid_price:.2f}")
 
@@ -195,8 +242,15 @@ def simulation(trader_df, open_order_size, pnl_obj):
                             open_short_sent_price = sent_order_price
                             open_short_fill_price = market_bid_price
 
+                            slippage = open_short_fill_price - open_short_sent_price # Sell side
+
+                            traded = 1
+
                         else:
                             logger.info(f"open_short order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_bid_qty}).")
+                    else:
+                        logger.info(f"close_long order NOT FILLED: sent_order_price({sent_order_price}) > market_bid_price({market_bid_price})")
+
 
 
                 if open_long_size>0: # bid
@@ -204,12 +258,18 @@ def simulation(trader_df, open_order_size, pnl_obj):
 
                         logger.info(f"Exchange received open_long order: {open_long_size} unit(s) @ {sent_order_price:.2f}")
 
-                        # Compute execution probability
-                        price_aggressiveness = max((sent_order_price - market_ask_price) / market_ask_price, 0.01)
-                        liquidity_factor = min(available_ask_qty / open_long_size, 1.0)
-                        prob_exec = (0.5 * price_aggressiveness) + (0.5 * liquidity_factor)
+                        # --- Mid-price and slippage ---
+                        mid_price = (market_bid_price + market_ask_price) / 2
 
-                        if prob_exec >= 0.08 and available_ask_qty > 0:
+                        # Compute execution probability
+                        price_aggressiveness = (((1 - min_price_aggressiveness) * sent_order_price) + (market_ask_price * ((min_price_aggressiveness * ca) - 1)))/(market_ask_price * (ca - 1))
+                        price_aggressiveness = np.clip(price_aggressiveness, 0, 1.0)
+                        penalty = spread_penalty_factor if spread_flag == 1 else 1.0
+                        prob_exec = penalty * price_aggressiveness
+
+                        # if prob_exec >= min_exec_prob_threshold and available_ask_qty > 0:
+                        rand_val = np.random.random()
+                        if rand_val < prob_exec and available_ask_qty > 0:
 
                             logger.info(f"open_long order FILLED: {open_long_size} unit(s) @ {market_ask_price:.2f}")
 
@@ -217,25 +277,43 @@ def simulation(trader_df, open_order_size, pnl_obj):
                             available_ask_qty = available_ask_qty - filled_open_long_size
                             open_long_sent_price = sent_order_price
                             open_long_fill_price = market_ask_price
+
+                            traded = 1
+
+                            slippage = open_long_sent_price - open_long_fill_price # Sell side
                                     
                         else:
                             logger.info(f"open_long order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_ask_qty}).")
+                    else:
+                        logger.info(f"close_long order NOT FILLED: sent_order_price({sent_order_price}) < market_ask_price({market_ask_price})")
+
+            else:
+                logger.info(f"No new orders received...")
+                mid_price = (best_bid_price + best_ask_price) / 2
+                   
 
 
             pnl_and_pos_dict = pnl_obj.update_pnl(market_bid_price, market_ask_price, filled_open_long_size, filled_close_long_size, filled_open_short_size, filled_close_short_size)
 
-            total_pnl = pnl_and_pos_dict['total_pnl']
+            gross_pnl_per_trade = pnl_and_pos_dict['total_pnl'] # Gross PnL
             realized_pnl = pnl_and_pos_dict['realized_pnl']
             unrealized_pnl = pnl_and_pos_dict['unrealized_pnl']
             long_position = pnl_and_pos_dict['total_long_pos']
             short_position = pnl_and_pos_dict['total_short_pos']
 
+
+            if traded:
+                num_of_trades = num_of_trades + 1
+
             
             # Add records
             log_records.append({
+                "signal":signal,
                 "exchange_time": exec_time,    
-                "order_sent_time": order_sent_time if order_generated else "None",    
-                "total_pnl": total_pnl,
+                "order_sent_time": order_sent_time if order_generated else None,    
+                "mid_price":mid_price,
+                "slippage":slippage,
+                "gross_pnl_per_trade": gross_pnl_per_trade,
                 "realized_pnl": realized_pnl,
                 "unrealized_pnl": unrealized_pnl,
                 "long_position": long_position,
@@ -251,16 +329,21 @@ def simulation(trader_df, open_order_size, pnl_obj):
                 "filled_close_long_size": filled_close_long_size,
                 "filled_close_short_size": filled_close_short_size,
                 "filled_open_short_size": filled_open_short_size,
-                "filled_open_long_size": filled_open_long_size
+                "filled_open_long_size": filled_open_long_size,
+                "prob_exec":prob_exec,
+                "price_aggressiveness":price_aggressiveness,
+                "traded_or_not":traded,
+                "spread_flag":spread_flag
                 })
             
 
         else: 
-            logger.info(f"Order Cancelled. Holding current position (Long={long_position}, Short={short_position})")
+            logger.info(f"Order Cancelled!!! --> No Matched events. ")
 
         # Convert to DataFrame
         results_df = pd.DataFrame(log_records)
 
-    return results_df
+
+    return results_df, num_of_trades, total_received_signal_count
 
 

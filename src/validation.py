@@ -61,7 +61,7 @@ def validate_signals(signals_csv_path, quotes_csv_path, signals_validated_csv_pa
 
 
 
-def validate_quotes(quotes_csv_path, quotes_validated_csv_path, k, plots_saving_path):
+def validate_quotes(quotes_csv_path, quotes_validated_csv_path, k, plots_dir_path):
 
     logger.info("-------- Quote Data Validation Report --------")
     logger.info("==============================================")
@@ -133,7 +133,8 @@ def validate_quotes(quotes_csv_path, quotes_validated_csv_path, k, plots_saving_
 
 
     # -----------------------------------Spread threshold------------------------------------------------
-    spread = (quotes_raw_df['ask_price'] - quotes_raw_df['bid_price']) / quotes_raw_df['bid_price']
+    mid_price = (quotes_raw_df['ask_price'] + quotes_raw_df['bid_price']) / 2
+    spread = (quotes_raw_df['ask_price'] - quotes_raw_df['bid_price']) / mid_price
     mean = spread.mean()
     std = spread.std()
     spread_threshold = mean + k * std   # flag anything > k standard deviations away
@@ -148,8 +149,7 @@ def validate_quotes(quotes_csv_path, quotes_validated_csv_path, k, plots_saving_
     else:
         logger.info(f"PASS: No rows with spread > {spread_threshold:.6f} found.")
 
-    save_path = os.path.join(plots_saving_path, "spread_distribution.png")
-    plot_spread_distribution(spread, mean, k, spread_threshold, save_path)
+    plot_spread_distribution(spread, mean, k, spread_threshold, plots_dir_path)
 
 
     # -----------------------------------Positive Volume Check---------------------------------------------

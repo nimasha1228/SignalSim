@@ -17,6 +17,11 @@
     "simulation": {
       "strength_threshold":0.5,
       "latency_in_secs":1,
-      "open_order_size":1
+      "open_order_size":1,
+      "ca":1.005,
+      "cb":0.999,
+      "min_price_aggressiveness":0.8,
+      "min_exec_prob_threshold":0.75,
+      "spread_penalty_factor":0.5
   }
   }
