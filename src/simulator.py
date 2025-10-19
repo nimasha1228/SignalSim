@@ -84,7 +84,9 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
     log_records = []
 
     # data_end_time = timestamps.max() 
-    num_of_trades = 0
+    total_num_of_trades = 0
+    total_open_count = 0
+    total_close_count = 0
     buy_signal_count = (trader_df["action_int"] == 1).sum()
     sell_signal_count = (trader_df["action_int"] == -1).sum()
     total_received_signal_count = buy_signal_count + sell_signal_count
@@ -141,7 +143,7 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
             available_bid_qty = matched_event["bid_qty"].iloc[0]
             spread_flag = matched_event["spread_flag"].iloc[0]
             
-            traded = 0
+            order_slippage = 0.0 
             slippage = 0.0 
 
             if order_generated:
@@ -171,9 +173,9 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
                             close_long_sent_price = sent_order_price
                             close_long_fill_price = market_bid_price
 
-                            slippage =  close_long_fill_price - close_long_sent_price # Sell side
+                            order_slippage =  (close_long_fill_price - close_long_sent_price) * filled_close_long_size # Sell side
+                            slippage = slippage + order_slippage
 
-                            traded = 1
                             
                         else:
                             logger.info(f"close_long order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_bid_qty}).")   
@@ -206,9 +208,9 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
                             close_short_sent_price = sent_order_price
                             close_short_fill_price = market_ask_price
 
-                            slippage = close_short_sent_price - close_short_fill_price # Buy side
+                            order_slippage = (close_short_sent_price - close_short_fill_price) * filled_close_short_size # Buy side
+                            slippage = slippage + order_slippage
 
-                            traded = 1
 
                         else:    
                             logger.info(f"close_short order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_ask_qty}).")
@@ -243,9 +245,9 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
                             open_short_sent_price = sent_order_price
                             open_short_fill_price = market_bid_price
 
-                            slippage = open_short_fill_price - open_short_sent_price # Sell side
+                            order_slippage = (open_short_fill_price - open_short_sent_price) * filled_open_short_size # Sell side
+                            slippage = slippage + order_slippage
 
-                            traded = 1
 
                         else:
                             logger.info(f"open_short order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_bid_qty}).")
@@ -279,10 +281,10 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
                             open_long_sent_price = sent_order_price
                             open_long_fill_price = market_ask_price
 
-                            traded = 1
+                            slippage = slippage + order_slippage
+                            order_slippage = (open_long_sent_price - open_long_fill_price) * filled_open_long_size # Sell side
 
-                            slippage = open_long_sent_price - open_long_fill_price # Sell side
-                                    
+
                         else:
                             logger.info(f"open_long order NOT FILLED: (exec_prob={prob_exec:.2f}, available_qty={available_ask_qty}).")
                     else:
@@ -296,15 +298,19 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
 
             pnl_and_pos_dict = pnl_obj.update_pnl(market_bid_price, market_ask_price, filled_open_long_size, filled_close_long_size, filled_open_short_size, filled_close_short_size)
 
-            gross_pnl_per_trade = pnl_and_pos_dict['total_pnl'] # Gross PnL
+            gross_pnl = pnl_and_pos_dict['gross_pnl'] # Gross PnL
+            net_pnl = pnl_and_pos_dict['net_pnl'] # Net PnL
+            num_of_trades = pnl_and_pos_dict['num_of_trades'] 
+            max_drawdown = pnl_and_pos_dict['max_drawdown']
+            peak_pnl = pnl_and_pos_dict['peak_pnl']
+            num_of_opened_trades = pnl_and_pos_dict['num_of_opened_trades'] 
+            num_of_closed_trades = pnl_and_pos_dict['num_of_closed_trades'] 
             realized_pnl = pnl_and_pos_dict['realized_pnl']
             unrealized_pnl = pnl_and_pos_dict['unrealized_pnl']
             long_position = pnl_and_pos_dict['total_long_pos']
             short_position = pnl_and_pos_dict['total_short_pos']
 
 
-            if traded:
-                num_of_trades = num_of_trades + 1
 
             
             # Add records
@@ -314,7 +320,10 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
                 "order_sent_time": order_sent_time if order_generated else None,    
                 "mid_price":mid_price,
                 "slippage":slippage,
-                "gross_pnl_per_trade": gross_pnl_per_trade,
+                "gross_pnl": gross_pnl,
+                "net_pnl": net_pnl,
+                "max_drawdown":max_drawdown,
+                "peak_pnl":peak_pnl,
                 "realized_pnl": realized_pnl,
                 "unrealized_pnl": unrealized_pnl,
                 "long_position": long_position,
@@ -333,7 +342,9 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
                 "filled_open_long_size": filled_open_long_size,
                 "prob_exec":prob_exec,
                 "price_aggressiveness":price_aggressiveness,
-                "traded_or_not":traded,
+                "num_of_trades":num_of_trades,
+                "num_of_opened_trades":num_of_opened_trades,
+                "num_of_closed_trades":num_of_closed_trades,
                 "spread_flag":spread_flag
                 })
             
@@ -345,6 +356,6 @@ def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, c
         results_df = pd.DataFrame(log_records)
 
 
-    return results_df, num_of_trades, total_received_signal_count
+    return results_df, total_received_signal_count
 
 

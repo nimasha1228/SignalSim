@@ -1,8 +1,11 @@
 import numpy as np
 
 class RealTimePnL:
-    def __init__(self):
-        # Initialize state variables to zero
+    def __init__(self, commision_per_trade):
+
+        self.commision_per_trade = commision_per_trade
+        self.total_running_commision = 0
+
         self.total_long_spent_value = 0.0
         self.total_long_position_size = 0.0
         self.average_long_entry_price = 0.0
@@ -16,11 +19,11 @@ class RealTimePnL:
         self.realized_short_pnl = 0.0
         self.unrealized_short_pnl = 0.0
         self.total_short_pnl = 0.0
-        
-        self.total_pnl = 0.0
-        self.epsilon = 1e-6
-        
 
+        self.max_drawdown = 0.0
+        self.current_peak_pnl = 0.0
+        self.gross_pnl = 0.0
+        self.net_pnl = 0.0
 
     def update_pnl(self, best_bid_price: float, best_ask_price: float, 
                    opened_long_position_size: float, closed_long_position_size: float, 
@@ -34,7 +37,7 @@ class RealTimePnL:
         # --- 1. HANDLE LONG POSITIONS ---
         
         # A. Open Long Positions (Entry at Ask Price)
-        if opened_long_position_size > self.epsilon:
+        if opened_long_position_size > 0:
             current_long_spent = opened_long_position_size * best_ask_price
             
             new_long_spent = self.total_long_spent_value + current_long_spent
@@ -45,7 +48,7 @@ class RealTimePnL:
             self.total_long_position_size = new_long_size
             
         # B. Close Long Positions (Exit at Bid Price)
-        if closed_long_position_size > self.epsilon:
+        if closed_long_position_size > 0:
             
             closed_size = np.minimum(closed_long_position_size, self.total_long_position_size)
             
@@ -60,14 +63,14 @@ class RealTimePnL:
             self.total_long_position_size -= closed_size
             
             # Reset average entry price if position is flat
-            if self.total_long_position_size < self.epsilon:
+            if self.total_long_position_size < 0:
                 self.average_long_entry_price = 0.0
         
         
         # --- 2. HANDLE SHORT POSITIONS ---
         
         # A. Open Short Positions (Entry at Bid Price)
-        if opened_short_position_size > self.epsilon:
+        if opened_short_position_size > 0:
             current_short_spent = opened_short_position_size * best_bid_price
             
             new_short_spent = self.total_short_spent_value + current_short_spent
@@ -78,7 +81,7 @@ class RealTimePnL:
             self.total_short_position_size = new_short_size
             
         # B. Close Short Positions (Exit at Ask Price to cover)
-        if closed_short_position_size > self.epsilon:
+        if closed_short_position_size > 0:
             
             closed_size = np.minimum(closed_short_position_size, self.total_short_position_size)
 
@@ -93,7 +96,7 @@ class RealTimePnL:
             self.total_short_position_size -= closed_size
 
             # Reset average entry price if position is flat
-            if self.total_short_position_size < self.epsilon:
+            if self.total_short_position_size < 0:
                 self.average_short_entry_price = 0.0
 
 
@@ -109,12 +112,34 @@ class RealTimePnL:
         self.total_short_pnl = self.realized_short_pnl + self.unrealized_short_pnl
         
         # Global Total PnL
-        self.total_pnl = self.total_long_pnl + self.total_short_pnl
+        self.gross_pnl = self.total_long_pnl + self.total_short_pnl
+
+        num_of_trades = int(opened_long_position_size > 0) + int(opened_short_position_size > 0) + int(closed_long_position_size > 0) + int(closed_short_position_size > 0)
+        num_of_opened_trades = int(opened_long_position_size > 0) + int(opened_short_position_size > 0) 
+        num_of_closed_trades =  int(closed_long_position_size > 0) + int(closed_short_position_size > 0)
+
+        current_commision = num_of_trades * self.commision_per_trade
+        self.total_running_commision = self.total_running_commision + current_commision
+        self.net_pnl = self.gross_pnl - self.total_running_commision
+        
+        current_drawdown = (self.current_peak_pnl - self.net_pnl)/self.current_peak_pnl
+        if self.max_drawdown < current_drawdown:
+            self.max_drawdown = current_drawdown
+        if self.net_pnl > self.current_peak_pnl:
+            self.current_peak_pnl = self.net_pnl
+
+
 
         # You would typically return a dictionary of the updated state for logging, 
         # or simply rely on the class's state being updated.
         return {
-            'total_pnl': self.total_pnl,
+            'gross_pnl': self.gross_pnl,
+            'net_pnl': self.net_pnl,
+            'max_drawdown':self.max_drawdown,
+            'peak_pnl':self.current_peak_pnl,
+            'num_of_trades':num_of_trades,
+            'num_of_opened_trades':num_of_opened_trades,
+            'num_of_closed_trades':num_of_closed_trades,
             'realized_pnl': self.realized_long_pnl + self.realized_short_pnl,
             'unrealized_pnl': self.unrealized_long_pnl + self.unrealized_short_pnl,
             'total_long_pos':self.total_long_position_size,
@@ -125,71 +150,43 @@ class RealTimePnL:
 
 
 
-def calculate_max_drawdown(df, gross_pnl_col="gross_pnl_per_trade", slippage_col="slippage"):
-    net_pnl = df[gross_pnl_col].to_numpy(dtype=float) - np.abs(df[slippage_col].to_numpy(dtype=float))
-    cum_pnl = np.cumsum(net_pnl)
+def get_max_drawdown(df, max_drawdown_col="max_drawdown"):
+    max_drawdown = df[max_drawdown_col].iloc[-1] 
+    return max_drawdown
 
-    running_max = np.maximum.accumulate(cum_pnl)
-    drawdown = cum_pnl - running_max
+def get_total_num_of_trades(df, traded_count_col="num_of_trades"):
+    total_trade_count = df[traded_count_col].sum()
+    return total_trade_count
+    
 
-    max_drawdown = drawdown.min()
+def get_gross_and_net_pnl(df, gross_pnl_col="gross_pnl", net_pnl_col="net_pnl"):
+    gross_pnl = df[gross_pnl_col].iloc[-1] 
+    net_pnl =  df[net_pnl_col].iloc[-1]
 
-    return float(max_drawdown)
-
-
-
-def compute_gross_and_net_pnl(df, pnl_col="total_pnl", slippage_col="slippage"):
-    """
-    Compute Gross and Net PnL over the entire simulation period (including holding times).
-    """
-
-    # --- Gross PnL: total profit over time ---
-    gross_pnl = df[pnl_col].iloc[-1] - df[pnl_col].iloc[0]
-
-    # --- Total slippage cost: only for executed trades ---
-    total_slippage_cost = df.loc[df["traded_or_not"] == 1, slippage_col].abs().sum()
-
-    # --- Net PnL: gross minus total slippage ---
-    net_pnl = gross_pnl - total_slippage_cost
-
-    print(f"💰 Gross PnL (including holds): {gross_pnl:.6f}")
-    print(f"📉 Total Slippage Cost (executed only): {total_slippage_cost:.6f}")
-    print(f"✅ Net PnL after Slippage: {net_pnl:.6f}")
+    print(f"Gross PnL: {gross_pnl:.6f}")
+    print(f"Net PnL: {net_pnl:.6f}")
 
     return float(gross_pnl), float(net_pnl)
 
 
 
-def calculate_average_trade_pnl(df, realized_pnl_col="realized_pnl", trade_flag_col="traded_or_not"):
-    """
-    Calculate average realized PnL per executed trade.
-    """
-    executed = df[df[trade_flag_col] == 1]
+def calculate_average_trade_pnl(df, realized_pnl_col="realized_pnl", traded_close_count_col = "num_of_closed_trades"):
+    total_realized_pnl = df[realized_pnl_col].iloc[-1]
+    traded_close_count = df[traded_close_count_col].sum()
+    avg_trade_pnl = total_realized_pnl/traded_close_count
+    print(f"Average Trade PnL: {avg_trade_pnl:.6f}")
+    return float(avg_trade_pnl)
+
+
+def calculate_average_slippage(df, slippage_col="slippage", traded_count_col="num_of_trades"):
+    executed = df[df[traded_count_col]>0]
+    total_trade_count = df[traded_count_col].sum()
     if executed.empty:
-        print("⚠️ No executed trades found.")
+        print("No executed trades found.")
         return 0.0, 0
 
-    avg_trade_pnl = executed[realized_pnl_col].mean()
-    trade_count = len(executed)
+    avg_slippage = executed[slippage_col].sum()/ total_trade_count
 
-    print(f"📊 Executed Trades: {trade_count}")
-    print(f"💰 Average Trade PnL: {avg_trade_pnl:.6f}")
-
-    return float(avg_trade_pnl), trade_count
-
-
-def calculate_average_slippage(df, slippage_col="slippage", trade_flag_col="traded_or_not"):
-    """
-    Calculate average slippage per executed trade.
-    """
-    executed = df[df[trade_flag_col] == 1]
-    if executed.empty:
-        print("⚠️ No executed trades found.")
-        return 0.0, 0
-
-    avg_slippage = executed[slippage_col].abs().mean()
-
-    print(f"📊 Executed Trades: {trade_count}")
-    print(f"📉 Average Slippage per Trade: {avg_slippage:.6f}")
-
+    print(f"Executed Trades: {total_trade_count}")
+    print(f"Average Slippage per Trade: {avg_slippage:.6f}")
     return float(avg_slippage)

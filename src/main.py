@@ -34,6 +34,7 @@ def main():
     C_b = config["simulation"]["cb"]
     MIN_EXEC_PROB_THRESHOLD = config["simulation"]["min_exec_prob_threshold"]
     MIN_PRICE_AGGRESSIVENESS = config["simulation"]["min_price_aggressiveness"]
+    COMMISION_PER_TRADE = config["simulation"]["commision_per_trade"]
 
     signals_csv_path = os.path.join(PROJECT_ROOT,config["data"]["signals_csv_path"])
     quotes_csv_path = os.path.join(PROJECT_ROOT,config["data"]["quotes_csv_path"])
@@ -57,18 +58,21 @@ def main():
     quotes_validated_df = validate_quotes(quotes_csv_path, quotes_validated_csv_path, K, plots_dir_path)
     matched_df = integrate_signals(quotes_validated_df,signals_validated_df,matched_csv_path,STRENGTH_THRESHOLD)
     plot_action_vs_signal_strength(matched_df, plots_dir_path, strength_threshold=0.5)
-                                                                                
-    pnl_obj = RealTimePnL()
-    results_df, num_of_trades, total_received_signal_count = simulation(matched_df, OPEN_ORDER_SIZE, pnl_obj, SPREAD_PENALTY_FACTOR, C_a, C_b, MIN_PRICE_AGGRESSIVENESS,  MIN_EXEC_PROB_THRESHOLD)
+                                                
+    pnl_obj = RealTimePnL(COMMISION_PER_TRADE)
+    results_df, total_received_signal_count = simulation(matched_df, OPEN_ORDER_SIZE, pnl_obj, SPREAD_PENALTY_FACTOR, C_a, C_b, MIN_PRICE_AGGRESSIVENESS,  MIN_EXEC_PROB_THRESHOLD)
     results_df.to_csv(results_csv, index=False)
 
-    max_drawdown = calculate_max_drawdown(results_df)
-    gross_pnl, net_pnl = compute_gross_and_net_pnl(results_df)
-    avg_trade_pnl, trade_count = calculate_average_trade_pnl(results_df)
+    num_of_trades = get_total_num_of_trades(results_df)
+
+    max_drawdown = get_max_drawdown(results_df)
+    gross_pnl, net_pnl = get_gross_and_net_pnl(results_df)
+    avg_trade_pnl = calculate_average_trade_pnl(results_df)
     avg_slippage = calculate_average_slippage(results_df)
     
-    print("total_received_signal_count:",total_received_signal_count," num_of_trades:", num_of_trades, "avg_trade_pnl:",avg_trade_pnl," trade_count:", trade_count)
-    print("gross_pnl:",gross_pnl," net_pnl:", net_pnl, " avg_slippage:", avg_slippage," max_drawdown:",max_drawdown)
+    print("total_received_signal_count:",total_received_signal_count," num_of_trades:", num_of_trades, "avg_trade_pnl:",avg_trade_pnl)
+    # print("gross_pnl:",gross_pnl," net_pnl:", net_pnl, " avg_slippage:", avg_slippage," max_drawdown:",max_drawdown)
+    print("avg_slippage:", avg_slippage)
 
 
 

@@ -28,7 +28,7 @@ def plot_spread_distribution(spread, mean, k, spread_threshold, plots_dir_path):
     # Save
     file_save_path = os.path.join(plots_dir_path, "spread_distribution.png")
     plt.savefig(file_save_path, dpi=300, bbox_inches="tight")
-    print(f"✅ Spread Distribution plot saved at: {plots_dir_path}")
+    print(f"Spread Distribution plot saved at: {plots_dir_path}")
 
 
 def plot_exchange_order_delay(df, plots_dir_path, unit="ms"):
@@ -109,7 +109,7 @@ def plot_and_save_max_drawdown(df, plots_dir_path):
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"📁 Plot saved at: {os.path.abspath(save_path)}")
+    print(f"Plot saved at: {os.path.abspath(save_path)}")
 
     return max_dd
 
@@ -158,8 +158,8 @@ def plot_and_analyze_pnl(df, plots_dir_path):
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"✅ PnL plot saved to: {save_path}")
-    print(f"📈 Gross PnL: {gross_pnl:.2f}, Net PnL: {net_pnl:.2f}, Avg Trade PnL: {avg_trade_pnl:.4f}, Trades: {num_trades}")
+    print(f"PnL plot saved to: {save_path}")
+    print(f"Gross PnL: {gross_pnl:.2f}, Net PnL: {net_pnl:.2f}, Avg Trade PnL: {avg_trade_pnl:.4f}, Trades: {num_trades}")
 
     # --- Return summary ---
     return {
@@ -178,7 +178,7 @@ def plot_execution_probability_scatter(df, plots_dir_path, min_exec_prob_thresho
 
     # --- Validate column ---
     if "prob_exec" not in df.columns:
-        print("⚠️ Column 'prob_exec' not found in DataFrame.")
+        print("Column 'prob_exec' not found in DataFrame.")
         return
 
     # --- Prepare data ---
@@ -229,8 +229,8 @@ def plot_execution_probability_scatter(df, plots_dir_path, min_exec_prob_thresho
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"✅ Execution probability scatter plot saved to: {save_path}")
-    print(f"📊 Threshold line used: {min_exec_prob_threshold}")
+    print(f"Execution probability scatter plot saved to: {save_path}")
+    print(f"Threshold line used: {min_exec_prob_threshold}")
 
 
 def plot_line_column(df, column_name, plots_dir_path):
@@ -240,7 +240,7 @@ def plot_line_column(df, column_name, plots_dir_path):
 
     # --- Validate column ---
     if column_name not in df.columns:
-        print(f"⚠️ Column '{column_name}' not found in DataFrame.")
+        print(f"Column '{column_name}' not found in DataFrame.")
         return
 
     # --- Prepare data ---
@@ -279,7 +279,7 @@ def plot_line_column(df, column_name, plots_dir_path):
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"✅ Line plot for '{column_name}' saved to: {save_path}")
+    print(f"Line plot for '{column_name}' saved to: {save_path}")
 
 
 def plot_signal_vs_spread_flag(df, plots_dir_path):
@@ -297,7 +297,7 @@ def plot_signal_vs_spread_flag(df, plots_dir_path):
     # --- Validate required columns ---
     required_cols = {"signal", "spread_flag"}
     if not required_cols.issubset(df.columns):
-        print(f"⚠️ DataFrame must contain the columns: {required_cols}")
+        print(f"DataFrame must contain the columns: {required_cols}")
         return
 
     # --- Prepare data ---
@@ -342,7 +342,7 @@ def plot_signal_vs_spread_flag(df, plots_dir_path):
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"✅ Signal vs Spread Flag plot saved to: {save_path}")
+    print(f"Signal vs Spread Flag plot saved to: {save_path}")
 
 def plot_action_vs_signal_strength(matched_df, plots_dir_path, strength_threshold=0.5):
 
@@ -352,7 +352,7 @@ def plot_action_vs_signal_strength(matched_df, plots_dir_path, strength_threshol
     # --- Validate required columns ---
     required_cols = {"action_int", "signal_strength"}
     if not required_cols.issubset(matched_df.columns):
-        print(f"⚠️ DataFrame must contain the columns: {required_cols}")
+        print(f"DataFrame must contain the columns: {required_cols}")
         return
 
     # --- Prepare data ---
@@ -402,5 +402,5 @@ def plot_action_vs_signal_strength(matched_df, plots_dir_path, strength_threshol
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"✅ Action vs Signal Strength plot saved to: {save_path}")
-    print(f"📊 Threshold line marked at ±{strength_threshold}")
+    print(f"Action vs Signal Strength plot saved to: {save_path}")
+    print(f"Threshold line marked at ±{strength_threshold}")

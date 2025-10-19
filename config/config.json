@@ -22,6 +22,7 @@
       "cb":0.999,
       "min_price_aggressiveness":0.8,
       "min_exec_prob_threshold":0.75,
-      "spread_penalty_factor":0.5
+      "spread_penalty_factor":0.5,
+      "commision_per_trade":0.001
   }
   }
