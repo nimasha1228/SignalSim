@@ -13,9 +13,9 @@ def validate_signals(signals_csv_path, quotes_csv_path, signals_validated_csv_pa
 
     signals_raw_df = pd.read_csv(signals_csv_path) 
     quotes_raw_df = pd.read_csv(quotes_csv_path) 
-    initial_row_count = len(signals_raw_df)
+    initial_signals_row_count = len(signals_raw_df)
 
-    # --- Normalize timestamp columns ---
+    # --- Converting timestamp columns ---
     signals_raw_df["timestamp"] = pd.to_datetime(
         signals_raw_df["timestamp"].astype(str).str.replace(",", ".", regex=False),
         errors="coerce"
@@ -36,26 +36,27 @@ def validate_signals(signals_csv_path, quotes_csv_path, signals_validated_csv_pa
         logger.info("PASS: No null values found.")
 
     # ------------------------- Timestamp Alignment Check -----------------
-    aligned = signals_raw_df['timestamp'].isin(quotes_raw_df['timestamp'])
-    num_misaligned = (~aligned).sum()
-    if num_misaligned == 0:
+    timestamp_available = signals_raw_df['timestamp'].isin(quotes_raw_df['timestamp'])
+    num_missed_timestamps = (~timestamp_available).sum()
+    if num_missed_timestamps == 0:
         logger.info("PASS: All signal timestamps are aligned with quotes.")
     else:
-        logger.info(f"FLAG: Found {num_misaligned} misaligned signal row(s).")
-        signals_raw_df = signals_raw_df[aligned]
-        logger.info(f"ACTION: Removed {num_misaligned} misaligned signal row(s).")
+        logger.info(f"FLAG: Found {num_missed_timestamps} misaligned signal row(s).")
+        signals_raw_df = signals_raw_df[timestamp_available]
+        logger.info(f"ACTION: Removed {num_missed_timestamps} misaligned signal row(s).")
 
     # ------------------------- Summary Report ----------------------------
     final_row_count = len(signals_raw_df)
-    total_rows_dropped = initial_row_count - final_row_count
+    total_rows_dropped = initial_signals_row_count - final_row_count
 
     log_blank_line()
-    logger.info(f"Rows checked (Initial): {initial_row_count}")
+    logger.info(f"Rows checked (Initial): {initial_signals_row_count}")
     logger.info(f"Rows dropped (Total): {total_rows_dropped}")
     logger.info(f"Rows remaining (Final): {final_row_count}")
     log_blank_line()
 
     signals_raw_df.to_csv(signals_validated_csv_path, index=False)
+
     return signals_raw_df
 
 
@@ -91,7 +92,7 @@ def validate_quotes(quotes_csv_path, quotes_validated_csv_path, k, plots_dir_pat
 
 
     
-    # ----------------Check for strictly increasing timestamps (Monotonicity Check)----------------------
+    # ----------------Check for strictly increasing timestamps ----------------------
     if not quotes_raw_df['timestamp'].is_monotonic_increasing:
         logger.info("FLAG: Timestamps are not strictly increasing. Sorting by timestamp.")
 

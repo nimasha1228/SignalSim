@@ -68,9 +68,10 @@ def order_generator(signal, best_bid_price, best_ask_price, long_position, short
 
 
 
-def simulation(trader_df, open_order_size, pnl_obj, spread_penalty_factor, cb, ca, min_price_aggressiveness, min_exec_prob_threshold):
+def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, ca, min_price_aggressiveness, min_exec_prob_threshold):
 
-    exchange_df = deepcopy(trader_df)
+    exchange_df = deepcopy(merged_df)
+    trader_df = deepcopy(merged_df)
 
     # Convert to numpy arrays for efficient iteration
     timestamps = trader_df["timestamp"].to_numpy()
