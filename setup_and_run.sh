@@ -3,7 +3,7 @@ set -e  # Exit immediately if a command fails
 
 # === CONFIGURATION ===
 ENV_NAME="signal_sim_env"
-PY_VER="3.10"
+PY_VER="3.11"
 MAIN_SCRIPT="main.py"
 REQ_FILE="requirements.txt"
 
