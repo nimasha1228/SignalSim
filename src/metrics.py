@@ -122,12 +122,18 @@ class RealTimePnL:
         self.total_running_commision = self.total_running_commision + current_commision
         self.net_pnl = self.gross_pnl - self.total_running_commision
         
-        current_drawdown = (self.current_peak_pnl - self.net_pnl)/self.current_peak_pnl
-        if self.max_drawdown < current_drawdown:
-            self.max_drawdown = current_drawdown
+        if self.current_peak_pnl != 0:
+            current_drawdown = self.current_peak_pnl - self.net_pnl
+        else:
+            current_drawdown = self.max_drawdown
+
         if self.net_pnl > self.current_peak_pnl:
             self.current_peak_pnl = self.net_pnl
 
+        if self.max_drawdown < current_drawdown:
+            self.max_drawdown = current_drawdown
+
+        print("net_pnl",self.net_pnl,"  current_peak_pnl",self.current_peak_pnl, self.max_drawdown,current_drawdown )
 
 
         # You would typically return a dictionary of the updated state for logging, 
@@ -150,35 +156,116 @@ class RealTimePnL:
 
 
 
-def get_max_drawdown(df, max_drawdown_col="max_drawdown"):
+def get_max_drawdown(df, max_drawdown_col="max_drawdown", peak_pnl_col="peak_pnl"):
+    """
+    Calculate the maximum drawdown from the provided DataFrame.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing simulation.
+    max_drawdown_col : str, optional
+        Column name containing drawdown values. Default is "max_drawdown".
+
+    Returns
+    -------
+    float
+        The final (maximum) drawdown value from the DataFrame.
+    """
     max_drawdown = df[max_drawdown_col].iloc[-1] 
-    return max_drawdown
+    peak_pnl = df[peak_pnl_col].iloc[-1] 
+    max_drawdown_percentage = (max_drawdown/peak_pnl)*100
+    return max_drawdown, max_drawdown_percentage
 
 def get_total_num_of_trades(df, traded_count_col="num_of_trades"):
+    """
+    Calculate the total number of trades executed during the simulation.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing trade-level statistics.
+    traded_count_col : str, optional
+        Column name representing trade count per iteration. Default is "num_of_trades".
+
+    Returns
+    -------
+    int
+        The total number of trades across all simulation steps.
+    """
     total_trade_count = df[traded_count_col].sum()
     return total_trade_count
     
 
 def get_gross_and_net_pnl(df, gross_pnl_col="gross_pnl", net_pnl_col="net_pnl"):
+    """
+    Retrieve and display the final gross and net PnL values from the DataFrame.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing PnL-related columns.
+    gross_pnl_col : str, optional
+        Column name for gross PnL. Default is "gross_pnl".
+    net_pnl_col : str, optional
+        Column name for net PnL. Default is "net_pnl".
+
+    Returns
+    -------
+    tuple of float
+        (gross_pnl, net_pnl) — the final gross and net PnL values.
+    """
     gross_pnl = df[gross_pnl_col].iloc[-1] 
     net_pnl =  df[net_pnl_col].iloc[-1]
-
-    print(f"Gross PnL: {gross_pnl:.6f}")
-    print(f"Net PnL: {net_pnl:.6f}")
 
     return float(gross_pnl), float(net_pnl)
 
 
 
 def calculate_average_trade_pnl(df, realized_pnl_col="realized_pnl", traded_close_count_col = "num_of_closed_trades"):
+    """
+    Compute the average realized PnL per closed trade.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing realized PnL and trade count data.
+    realized_pnl_col : str, optional
+        Column name for realized PnL. Default is "realized_pnl".
+    traded_close_count_col : str, optional
+        Column name representing number of closed trades. Default is "num_of_closed_trades".
+
+    Returns
+    -------
+    float
+        The average realized PnL per closed trade.
+    """
     total_realized_pnl = df[realized_pnl_col].iloc[-1]
     traded_close_count = df[traded_close_count_col].sum()
     avg_trade_pnl = total_realized_pnl/traded_close_count
-    print(f"Average Trade PnL: {avg_trade_pnl:.6f}")
+    
     return float(avg_trade_pnl)
 
 
 def calculate_average_slippage(df, slippage_col="slippage", traded_count_col="num_of_trades"):
+    """
+    Calculate the average slippage per executed trade.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing slippage and trade count data.
+    slippage_col : str, optional
+        Column name for slippage values. Default is "slippage".
+    traded_count_col : str, optional
+        Column name representing trade count per iteration. Default is "num_of_trades".
+
+    Returns
+    -------
+    tuple
+        (average_slippage, total_trade_count) — average slippage per trade and total number of executed trades.
+    """
+
     executed = df[df[traded_count_col]>0]
     total_trade_count = df[traded_count_col].sum()
     if executed.empty:
@@ -187,6 +274,4 @@ def calculate_average_slippage(df, slippage_col="slippage", traded_count_col="nu
 
     avg_slippage = executed[slippage_col].sum()/ total_trade_count
 
-    print(f"Executed Trades: {total_trade_count}")
-    print(f"Average Slippage per Trade: {avg_slippage:.6f}")
-    return float(avg_slippage)
+    return float(avg_slippage), total_trade_count

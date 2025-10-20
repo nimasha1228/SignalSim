@@ -15,6 +15,7 @@
         "results_csv":"output/csvs/"
     },
     "simulation": {
+      "seed":10,
       "strength_threshold":0.5,
       "latency_in_secs":1,
       "open_order_size":1,

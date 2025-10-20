@@ -7,6 +7,33 @@ from logger_config import logger, log_blank_line, log_once
 
      
 def order_generator(signal, best_bid_price, best_ask_price, long_position, short_position, open_order_size=1):
+    """
+    Generate trade orders based on input trading signal and current market conditions.
+
+    Parameters
+    ----------
+    signal : int
+        Trading action indicator. (1 = Buy, -1 = Sell, 0 = Hold)
+    best_bid_price : float
+        Current best bid price from the order book.
+    best_ask_price : float
+        Current best ask price from the order book.
+    long_position : float
+        Current open long position size.
+    short_position : float
+        Current open short position size.
+    open_order_size : int or float, optional
+        Default size of the order to open or close. Default is 1.
+
+    Returns
+    -------
+    dict
+        Dictionary containing generated order details including:
+        - signal type
+        - open/close long and short sizes
+        - sent order price
+        - order type classification ("open_long", "close_short", etc.)
+    """
 
     log_blank_line()
 
@@ -68,8 +95,40 @@ def order_generator(signal, best_bid_price, best_ask_price, long_position, short
 
 
 
-def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, ca, min_price_aggressiveness, min_exec_prob_threshold):
+def simulation(merged_df, open_order_size, pnl_obj, spread_penalty_factor, cb, ca, min_price_aggressiveness, seed, min_exec_prob_threshold):
+    """
+    Run a full trading simulation cycle using the order generation and PnL update modules.
 
+    Parameters
+    ----------
+    merged_df : pandas.DataFrame
+        Combined DataFrame containing timestamped bid/ask prices, quantities, and signal actions.
+    open_order_size : int or float
+        Order size to be sent for each trading action.
+    pnl_obj : RealTimePnL
+        Instance of the RealTimePnL class used to update PnL and position states.
+    spread_penalty_factor : float
+        Factor applied to execution probability when spread is wide or flagged abnormal.
+    cb : float
+        Coefficient controlling bid-side aggressiveness scaling.
+    ca : float
+        Coefficient controlling ask-side aggressiveness scaling.
+    min_price_aggressiveness : float
+        Minimum aggressiveness threshold for execution probability.
+    min_exec_prob_threshold : float
+        Minimum execution probability required for an order to be filled.
+
+    Returns
+    -------
+    tuple
+        (results_df, total_received_signal_count)
+        - results_df : pandas.DataFrame
+            DataFrame containing detailed trade logs, including prices, fills, PnL, slippage, and position data.
+        - total_received_signal_count : int
+            Total number of trading signals processed during the simulation.
+    """
+
+    np.random.seed(seed)
     exchange_df = deepcopy(merged_df)
     trader_df = deepcopy(merged_df)
 

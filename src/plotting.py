@@ -3,6 +3,7 @@ import matplotlib.dates as mdates
 import pandas as pd
 import numpy as np
 import os
+from metrics import *
 
 
 def plot_spread_distribution(spread, mean, k, spread_threshold, plots_dir_path):
@@ -31,376 +32,108 @@ def plot_spread_distribution(spread, mean, k, spread_threshold, plots_dir_path):
     print(f"Spread Distribution plot saved at: {plots_dir_path}")
 
 
-def plot_exchange_order_delay(df, plots_dir_path, unit="ms"):
-    # Compute delay
-    if unit == "ms":
-        df["delay"] = (df["exchange_time"] -df["order_sent_time"]).dt.total_seconds() * 1000
-        ylabel = "Delay (ms)"
-    else:
-        df["delay"] = (df["exchange_time"] -df["order_sent_time"]).dt.total_seconds()
-        ylabel = "Delay (s)"
-
-    # Drop rows with missing order_sent_time
-    df =df.dropna(subset=["order_sent_time"])
-
-    # Plot
-    plt.figure(figsize=(10, 5))
-    plt.plot(df["exchange_time"], df["delay"], marker="o", linestyle="-", label="Delay")
-    plt.xlabel("Exchange Time")
-    plt.ylabel(ylabel)
-    plt.title("Delay Between Order Sent Time and Received at Exchange")
-    plt.grid(True)
-    plt.legend()
-
-    # Save 
-    file_save_path = os.path.join(plots_dir_path, "execution_delay.png")
-    plt.savefig(file_save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-
-def plot_and_save_max_drawdown(df, plots_dir_path):
+def plot_pnl_and_slippage_summary(df, plots_dir_path):
     """
-    Calculate and plot Maximum Drawdown (MDD), and save the figure.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing per-trade or per-step PnL.
-    pnl_col : str, default "pnl_per_trade"
-        Column name containing PnL values.
-    save_path : str, default "max_drawdown_plot.png"
-        File path to save the plot (PNG format recommended).
-
-    Returns
-    -------
-    max_drawdown : float
-        Maximum drawdown value.
-    max_drawdown_pct : float
-        Maximum drawdown percentage.
+    Plot PnL, slippage, and drawdown metrics in a 2-column layout:
+    Left: Gross vs Net PnL + Max Drawdown curves.
+    Right: Slippage curve + textual summary.
     """
 
-    # --- Extract PnL array ---
-    pnl = df["gross_pnl_per_trade"].to_numpy(dtype=float)
-    cum_pnl = np.cumsum(pnl)
-    running_max = np.maximum.accumulate(cum_pnl)
-    drawdown = cum_pnl - running_max
+    # --- Extract metrics using your helper functions ---
+    gross_pnl, net_pnl = get_gross_and_net_pnl(df)
+    avg_trade_pnl = calculate_average_trade_pnl(df)
+    avg_slippage, total_trade_count = calculate_average_slippage(df)
+    max_drawdown, max_drawdown_percentage = get_max_drawdown(df)
 
-    # --- Find max drawdown (most negative dip) ---
-    max_dd_idx = np.argmin(drawdown)
-    max_dd = drawdown[max_dd_idx]
-
-    # --- Plot ---
-    plt.figure(figsize=(10,6))
-    plt.plot(cum_pnl, label="Cumulative PnL", color='blue')
-    plt.plot(running_max, '--', label="Running Max", color='gray')
-    plt.fill_between(np.arange(len(cum_pnl)), cum_pnl, running_max, color='red', alpha=0.25)
-    plt.scatter(max_dd_idx, cum_pnl[max_dd_idx], color='red', marker='o', s=60,
-                label=f"Max Drawdown = {max_dd:.2f}")
-    plt.title("Equity Curve with Maximum Drawdown (Absolute PnL)")
-    plt.xlabel("Trade Index")
-    plt.ylabel("Cumulative PnL")
-    plt.legend()
-    plt.grid(True)
-
-
-    # --- Save Plot ---
-    os.makedirs(os.path.dirname(plots_dir_path) or ".", exist_ok=True)
-    save_path = os.path.join(plots_dir_path, "max_drawdown_plot.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    print(f"Plot saved at: {os.path.abspath(save_path)}")
-
-    return max_dd
-
-
-def plot_and_analyze_pnl(df, plots_dir_path):
-
-    # --- Ensure directory exists ---
-    os.makedirs(plots_dir_path, exist_ok=True)
-
-    # --- Prepare data ---
-    df = df.copy()
+    # --- Convert timestamp ---
     df["exchange_time"] = pd.to_datetime(df["exchange_time"])
-    df["realized_pnl"] = df["realized_pnl"].astype(float)
-    df["unrealized_pnl"] = df["unrealized_pnl"].astype(float)
-    df["total_pnl"] = df["realized_pnl"] + df["unrealized_pnl"]
+    x = df["exchange_time"]
 
-    # --- Compute Metrics ---
-    gross_pnl = df["realized_pnl"].sum()
-    net_pnl = df["total_pnl"].iloc[-1] - df["total_pnl"].iloc[0]
+    # --- Date formatter for axes ---
+    datetime_formatter = mdates.DateFormatter("%Y-%m-%d %H:%M:%S")
 
-    # Count trades = nonzero realized pnl events
-    num_trades = (df["realized_pnl"] != 0).sum()
-    avg_trade_pnl = gross_pnl / num_trades if num_trades > 0 else 0.0
+    # --- Create 2-column grid ---
+    fig = plt.figure(figsize=(14, 8))  # increased height for better visibility
+    gs = fig.add_gridspec(2, 2, width_ratios=[2, 1], height_ratios=[1, 1], wspace=0.25, hspace=0.6)
 
-    # --- Plot ---
-    plt.figure(figsize=(12, 6))
-    plt.plot(df["exchange_time"], df["total_pnl"], label="Total PnL", color="blue", linewidth=2)
-    plt.plot(df["exchange_time"], df["realized_pnl"], label="Realized PnL", color="green", linestyle="--", linewidth=1.8)
-    plt.plot(df["exchange_time"], df["unrealized_pnl"], label="Unrealized PnL", color="orange", linestyle=":", linewidth=1.8)
-    plt.fill_between(df["exchange_time"], df["unrealized_pnl"], alpha=0.1, color="orange")
+    # ======================================================
+    # (1,1) Gross vs Net PnL (Top Left)
+    # ======================================================
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(x, df["gross_pnl"], label="Gross PnL", color="green", linewidth=1.5)
+    ax1.plot(x, df["net_pnl"], label="Net PnL", color="orange", linestyle="--", linewidth=1.5)
+    ax1.axhline(y=avg_trade_pnl, color="blue", linestyle=":", linewidth=1.2,
+                label=f"Avg Trade PnL ({avg_trade_pnl:.4f})")
 
-    # --- Format datetime axis ---
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
-    plt.gcf().autofmt_xdate()
+    dd_idx = df["max_drawdown"].idxmax()
+    dd_time = df.loc[dd_idx, "exchange_time"]
+    dd_pnl = df.loc[dd_idx, "net_pnl"]
+    ax1.scatter(dd_time, dd_pnl, color="red", s=60, zorder=5,
+                label=f"Max Drawdown: {max_drawdown:.2f} ({max_drawdown_percentage:.2f}%)")
 
+    ax1.set_title("Gross vs Net PnL with Avg Trade PnL & Max Drawdown")
+    ax1.set_ylabel("PnL")
+    ax1.legend()
+    ax1.grid(True)
+    ax1.xaxis.set_major_formatter(datetime_formatter)
+    plt.setp(ax1.xaxis.get_majorticklabels(), rotation=10, ha="right", fontsize=8)
 
-    plt.title("PnL Evolution Over Time", fontsize=14, fontweight="bold")
-    plt.xlabel("Time", fontsize=12)
-    plt.ylabel("PnL", fontsize=12)
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
+    # ======================================================
+    # (2,1) Max Drawdown Progression (Bottom Left)
+    # ======================================================
+    ax2 = fig.add_subplot(gs[1, 0])
+    ax2.plot(x, df["max_drawdown"], color="darkred", linewidth=1.5, label="Max Drawdown")
+    ax2.set_title("Max Drawdown Progression Over Time")
+    ax2.set_xlabel("Exchange Time")
+    ax2.set_ylabel("Drawdown")
+    ax2.legend()
+    ax2.grid(True)
+    ax2.xaxis.set_major_formatter(datetime_formatter)
+    plt.setp(ax2.xaxis.get_majorticklabels(), rotation=10, ha="right", fontsize=8)
 
-    # --- Save plot ---
-    save_path = os.path.join(plots_dir_path, "pnl_analysis.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    # ======================================================
+    # (1,2) Slippage Curve (Top Right)
+    # ======================================================
+    ax3 = fig.add_subplot(gs[0, 1])
+    ax3.plot(x, df["slippage"], color="salmon", linewidth=1.3, label="Slippage per Trade")
+    ax3.axhline(y=avg_slippage, color="brown", linestyle=":", linewidth=1.2,
+                label=f"Avg Slippage ({avg_slippage:.4f})")
+    ax3.set_title("Slippage Over Time with Average Marker")
+    ax3.set_ylabel("Slippage")
+    ax3.legend()
+    ax3.grid(True)
+    ax3.xaxis.set_major_formatter(datetime_formatter)
+    plt.setp(ax3.xaxis.get_majorticklabels(), rotation=25, ha="right", fontsize=8)
 
-    print(f"PnL plot saved to: {save_path}")
-    print(f"Gross PnL: {gross_pnl:.2f}, Net PnL: {net_pnl:.2f}, Avg Trade PnL: {avg_trade_pnl:.4f}, Trades: {num_trades}")
+    # ======================================================
+    # (2,2) Summary Text Box (Bottom Right)
+    # ======================================================
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.axis("off")
 
-    # --- Return summary ---
-    return {
-        "gross_pnl": gross_pnl,
-        "net_pnl": net_pnl,
-        "average_trade_pnl": avg_trade_pnl,
-        "num_trades": num_trades
-    }
+    summary_text = (
+        f"─────────────────────────────\n"
+        f"Summary Metrics\n"
+        f"─────────────────────────────\n"
+        f"Total Trades: {int(total_trade_count)}\n"
+        f"Average Trade PnL: {avg_trade_pnl:.6f}\n"
+        f"Average Slippage: {avg_slippage:.6f}\n"
+        f"Gross PnL: {gross_pnl:.6f}\n"
+        f"Net PnL: {net_pnl:.6f}\n"
+        f"Max Drawdown: {max_drawdown:.4f} ({max_drawdown_percentage:.2f}%)\n"
+        f"─────────────────────────────\n"
+    )
 
-
-
-def plot_execution_probability_scatter(df, plots_dir_path, min_exec_prob_threshold):
-
-    # --- Ensure directory exists ---
-    os.makedirs(plots_dir_path, exist_ok=True)
-
-    # --- Validate column ---
-    if "prob_exec" not in df.columns:
-        print("Column 'prob_exec' not found in DataFrame.")
-        return
-
-    # --- Prepare data ---
-    df = df.copy()
-    if "exchange_time" in df.columns:
-        df["exchange_time"] = pd.to_datetime(df["exchange_time"])
-        x_axis = df["exchange_time"]
-        xlabel = "Time"
-    else:
-        x_axis = range(len(df))
-        xlabel = "Simulation Step"
-
-    # --- Round for clarity ---
-    df["prob_exec"] = df["prob_exec"].round(4)
-
-    # --- Scatter plot ---
-    plt.figure(figsize=(12, 6))
-
-    if "signal" in df.columns:
-        # Color by signal: +1 = Buy, -1 = Sell, 0 = Hold
-        colors = df["signal"].map({1: "blue", -1: "red", 0: "gray"})
-        plt.scatter(x_axis, df["prob_exec"], c=colors, alpha=0.7, s=40, label="Execution Probability")
-        plt.scatter([], [], color="blue", label="Buy")
-        plt.scatter([], [], color="red", label="Sell")
-        plt.scatter([], [], color="gray", label="Hold")
-    else:
-        plt.scatter(x_axis, df["prob_exec"], color="purple", alpha=0.7, s=40, label="Execution Probability")
-
-    # --- Threshold line ---
-    plt.axhline(min_exec_prob_threshold, color="black", linestyle="--", linewidth=1,
-                label=f"Min Exec Threshold ({min_exec_prob_threshold})")
-
-    # --- Formatting ---
-    plt.title("Execution Probability Scatter Plot", fontsize=14, fontweight="bold")
-    plt.xlabel(xlabel, fontsize=12)
-    plt.ylabel("Execution Probability", fontsize=12)
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-
-    # --- Format datetime axis if applicable ---
-    if "exchange_time" in df.columns:
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
-        plt.gcf().autofmt_xdate(rotation=30)
-
-    # --- Save plot ---
-    save_path = os.path.join(plots_dir_path, "execution_prob_scatter.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    print(f"Execution probability scatter plot saved to: {save_path}")
-    print(f"Threshold line used: {min_exec_prob_threshold}")
+    ax4.text(0.05, 0.9, summary_text, fontsize=10, fontfamily="monospace",
+             va="top", ha="left", linespacing=1.5,
+             bbox=dict(facecolor="whitesmoke", alpha=0.9, boxstyle="round"))
 
 
-def plot_line_column(df, column_name, plots_dir_path):
- 
-    # --- Ensure directory exists ---
-    os.makedirs(plots_dir_path, exist_ok=True)
+    # Save and show
+    combined_path = os.path.join(plots_dir_path, "pnl_slippage_dd_summary_grid.png")
+    plt.savefig(combined_path, dpi=300, bbox_inches="tight")
+    plt.show()
 
-    # --- Validate column ---
-    if column_name not in df.columns:
-        print(f"Column '{column_name}' not found in DataFrame.")
-        return
-
-    # --- Prepare data ---
-    df = df.copy()
-    if "exchange_time" in df.columns:
-        df["exchange_time"] = pd.to_datetime(df["exchange_time"])
-        x_axis = df["exchange_time"]
-        xlabel = "Time"
-    else:
-        x_axis = range(len(df))
-        xlabel = "Simulation Step"
-
-    # --- Round numeric data for clarity ---
-    if pd.api.types.is_numeric_dtype(df[column_name]):
-        df[column_name] = df[column_name].round(4)
-
-    # --- Line plot ---
-    plt.figure(figsize=(12, 6))
-    plt.plot(x_axis, df[column_name], color="blue", linewidth=1.5, label=column_name.replace("_", " ").title())
-
-    # --- Formatting ---
-    plt.title(f"{column_name.replace('_', ' ').title()} Line Plot", fontsize=14, fontweight="bold")
-    plt.xlabel(xlabel, fontsize=12)
-    plt.ylabel(column_name.replace("_", " ").title(), fontsize=12)
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-
-    # --- Format datetime axis if applicable ---
-    if "exchange_time" in df.columns:
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
-        plt.gcf().autofmt_xdate(rotation=30)
-
-    # --- Save plot ---
-    save_path = os.path.join(plots_dir_path, f"{column_name}_line_plot.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    print(f"Line plot for '{column_name}' saved to: {save_path}")
-
-
-def plot_signal_vs_spread_flag(df, plots_dir_path):
-    """
-    Plot signal vs spread_flag and save the plot.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing 'signal' and 'spread_flag' columns.
-        plots_dir_path (str): Directory path to save the plot.
-    """
-
-    # --- Ensure directory exists ---
-    os.makedirs(plots_dir_path, exist_ok=True)
-
-    # --- Validate required columns ---
-    required_cols = {"signal", "spread_flag"}
-    if not required_cols.issubset(df.columns):
-        print(f"DataFrame must contain the columns: {required_cols}")
-        return
-
-    # --- Prepare data ---
-    df = df.copy()
-    if "exchange_time" in df.columns:
-        df["exchange_time"] = pd.to_datetime(df["exchange_time"])
-        x_axis = df["exchange_time"]
-        xlabel = "Time"
-    else:
-        x_axis = range(len(df))
-        xlabel = "Simulation Step"
-
-    # --- Round for clarity ---
-    if pd.api.types.is_numeric_dtype(df["signal"]):
-        df["signal"] = df["signal"].round(3)
-
-    # --- Create figure ---
-    plt.figure(figsize=(12, 6))
-
-    # --- Plot signal (line) ---
-    plt.plot(x_axis, df["signal"], color="blue", linewidth=1.5, label="Signal")
-
-    # --- Overlay spread_flag (scaled for visibility) ---
-    spread_scaled = df["spread_flag"] * df["signal"].abs().max()
-    plt.step(x_axis, spread_scaled, color="red", linestyle="--", linewidth=1.2, label="Spread Flag (scaled)")
-
-    # --- Formatting ---
-    plt.title("Signal vs Spread Flag", fontsize=14, fontweight="bold")
-    plt.xlabel(xlabel, fontsize=12)
-    plt.ylabel("Signal Value", fontsize=12)
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-
-    # --- Format datetime axis if applicable ---
-    if "exchange_time" in df.columns:
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
-        plt.gcf().autofmt_xdate(rotation=30)
-
-    # --- Save plot ---
-    save_path = os.path.join(plots_dir_path, "signal_vs_spread_flag.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    print(f"Signal vs Spread Flag plot saved to: {save_path}")
-
-def plot_action_vs_signal_strength(matched_df, plots_dir_path, strength_threshold=0.5):
-
-    # --- Ensure directory exists ---
-    os.makedirs(plots_dir_path, exist_ok=True)
-
-    # --- Validate required columns ---
-    required_cols = {"action_int", "signal_strength"}
-    if not required_cols.issubset(matched_df.columns):
-        print(f"DataFrame must contain the columns: {required_cols}")
-        return
-
-    # --- Prepare data ---
-    df = matched_df.copy()
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        x_axis = df["timestamp"]
-        xlabel = "Time"
-    else:
-        x_axis = range(len(df))
-        xlabel = "Simulation Step"
-
-    # --- Round for clarity ---
-    df["signal_strength"] = df["signal_strength"].round(4)
-
-    # --- Create figure ---
-    plt.figure(figsize=(12, 6))
-
-    # --- Plot signal strength as line ---
-    plt.plot(x_axis, df["signal_strength"], color="blue", linewidth=1.5, label="Signal Strength")
-
-    # --- Overlay action_int (scaled for visibility) ---
-    action_scaled = df["action_int"] * df["signal_strength"].abs().max()
-    plt.step(x_axis, action_scaled, color="orange", linewidth=1.5, linestyle="--", label="Action Int (scaled)")
-
-    # --- Threshold line ---
-    plt.axhline(y=strength_threshold, color="green", linestyle="--", linewidth=1.2,
-                label=f"Strength Threshold (+{strength_threshold})")
-    plt.axhline(y=-strength_threshold, color="green", linestyle="--", linewidth=1.2,
-                label=f"Strength Threshold (-{strength_threshold})")
-
-    # --- Formatting ---
-    plt.title("Action vs Signal Strength", fontsize=14, fontweight="bold")
-    plt.xlabel(xlabel, fontsize=12)
-    plt.ylabel("Signal Strength / Action (scaled)", fontsize=12)
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-
-    # --- Format datetime axis if applicable ---
-    if "timestamp" in df.columns:
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M:%S'))
-        plt.gcf().autofmt_xdate(rotation=30)
-
-    # --- Save plot ---
-    save_path = os.path.join(plots_dir_path, "action_vs_signal_strength.png")
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    print(f"Action vs Signal Strength plot saved to: {save_path}")
-    print(f"Threshold line marked at ±{strength_threshold}")
+    # --- Print Summary ---
+    print(summary_text)
+    print(f"Combined plot saved to: {os.path.abspath(combined_path)}")
