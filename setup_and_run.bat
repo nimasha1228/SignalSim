@@ -2,25 +2,25 @@
 setlocal enabledelayedexpansion
 
 echo ==========================================
-echo 🚀 Setting up Signal Simulation Framework (Conda Only)
+echo 🚀 Setting up Signal Simulation Framework
 echo ==========================================
 
 set ENV_NAME=signal_sim_env
 set PY_VER=3.11
 set MAIN_SCRIPT=src\main.py
 set REQ_FILE=requirements.txt
+set VENV_DIR=.venv_%ENV_NAME%
 
 :: --- Check if Conda is installed ---
 where conda >nul 2>nul
 if %errorlevel% neq 0 (
-    echo ❌ Conda not found!
-    echo Please install Miniconda or Anaconda first.
-    echo Download: https://docs.conda.io/en/latest/miniconda.html
-    pause
-    exit /b 1
+    echo ⚠️ Conda not found! Falling back to Python virtual environment.
+    goto :USE_VENV
 )
 
-:: --- Check if environment exists ---
+:: --- Conda found: use Conda environment ---
+echo ✅ Conda detected. Using Conda environment setup.
+
 for /f "tokens=*" %%i in ('conda env list ^| findstr /C:"%ENV_NAME%"') do set FOUND_ENV=%%i
 
 if not defined FOUND_ENV (
@@ -51,3 +51,42 @@ python %MAIN_SCRIPT%
 
 echo ✅ All done! Simulation finished successfully.
 pause
+exit /b 0
+
+
+:: ===== FALLBACK: PYTHON VENV =====
+:USE_VENV
+where python >nul 2>nul
+if %errorlevel% neq 0 (
+    echo Python not found! Please install Python 3.10+ from https://www.python.org/downloads/
+    pause
+    exit /b 1
+)
+
+if not exist %VENV_DIR% (
+    echo Creating Python virtual environment...
+    python -m venv %VENV_DIR%
+)
+
+echo Activating virtual environment...
+call %VENV_DIR%\Scripts\activate.bat
+
+echo ------------------------------------------
+echo Active virtual environment: %VENV_DIR%
+python --version
+echo ------------------------------------------
+
+if exist %REQ_FILE% (
+    echo Installing dependencies...
+    python -m pip install --upgrade pip
+    python -m pip install -r %REQ_FILE%
+) else (
+    echo ⚠️ requirements.txt not found, skipping dependency installation.
+)
+
+echo Running main script...
+python %MAIN_SCRIPT%
+
+echo ✅ All done! Simulation finished successfully.
+pause
+exit /b 0
