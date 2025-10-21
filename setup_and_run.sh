@@ -8,12 +8,12 @@ MAIN_SCRIPT="src/main.py"
 REQ_FILE="requirements.txt"
 
 echo "=========================================="
-echo "🚀 Setting up Signal Simulation Framework (Conda Only)"
+echo "Setting up Signal Simulation Framework (Conda Only)"
 echo "=========================================="
 
 # === CHECK CONDA ===
 if ! command -v conda &> /dev/null; then
-    echo "❌ Conda not found!"
+    echo "Conda not found!"
     echo "Please install Miniconda or Anaconda before running this script."
     echo "Download: https://docs.conda.io/en/latest/miniconda.html"
     exit 1
@@ -46,11 +46,11 @@ if [ -f "$REQ_FILE" ]; then
     pip install --upgrade pip
     pip install -r "$REQ_FILE"
 else
-    echo "⚠️ requirements.txt not found, skipping dependency installation."
+    echo "requirements.txt not found, skipping dependency installation."
 fi
 
 # === RUN MAIN SCRIPT ===
 echo "Running main script..."
 python "$MAIN_SCRIPT"
 
-echo "✅ All done! Simulation finished successfully."
+echo "All done! Simulation finished successfully."
