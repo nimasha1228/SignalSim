@@ -53,7 +53,6 @@ def main():
     results_csv = os.path.join(results_path, "results.csv")
 
 
-
     # --- Call Validation Functions ---
     signals_validated_df = validate_signals(signals_csv_path, quotes_csv_path, signals_validated_csv_path)
     quotes_validated_df = validate_quotes(quotes_csv_path, quotes_validated_csv_path, K, plots_dir_path)
@@ -63,12 +62,14 @@ def main():
     results_df, total_received_signal_count = simulation(matched_df, OPEN_ORDER_SIZE, pnl_obj, SPREAD_PENALTY_FACTOR, C_a, C_b, MIN_PRICE_AGGRESSIVENESS, SEED, MIN_EXEC_PROB_THRESHOLD)
     results_df.to_csv(results_csv, index=False)
 
-    num_of_trades = get_total_num_of_trades(results_df)
+    # --- Call Metrics ---
+    # num_of_trades = get_total_num_of_trades(results_df)
+    # max_drawdown = get_max_drawdown(results_df)
+    # gross_pnl, net_pnl = get_gross_and_net_pnl(results_df)
+    # avg_trade_pnl = calculate_average_trade_pnl(results_df)
+    # avg_slippage, total_trade_count = calculate_average_slippage(results_df)
+    
 
-    max_drawdown = get_max_drawdown(results_df)
-    gross_pnl, net_pnl = get_gross_and_net_pnl(results_df)
-    avg_trade_pnl = calculate_average_trade_pnl(results_df)
-    avg_slippage, total_trade_count = calculate_average_slippage(results_df)
     plot_pnl_and_slippage_summary(results_df, plots_dir_path)
     
 

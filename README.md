@@ -89,7 +89,7 @@ pip install -r requirements.txt
 ### Run the Main Script
 
 ```bash
-python main.py
+python src/main.py
 ```
 
 ---
