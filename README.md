@@ -135,5 +135,4 @@ Example section:
 
 ---
 
-**This setup ensures full reproducibility on any system with Conda installed.**  
 The `.bat` and `.sh` scripts automate everything — no manual steps are required.
