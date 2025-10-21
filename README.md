@@ -37,13 +37,13 @@ This script will automatically:
 The first two steps are the same as above (**1** and **2**).  
 Then follow the steps below:
 
-#### - Create a Virtual Environment
+#### Create a Virtual Environment
 
 ```bash
 python -m venv <name_of_virtual_environment>
 ```
 
-#### - Activate the Virtual Environment
+#### Activate the Virtual Environment
 
 **Windows:**
 ```bash
@@ -55,13 +55,13 @@ python -m venv <name_of_virtual_environment>
 source <name_of_virtual_environment>/bin/activate
 ```
 
-#### - Install Dependencies
+#### Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-#### - Run the Main Script
+#### Run the Main Script
 
 ```bash
 python main.py
