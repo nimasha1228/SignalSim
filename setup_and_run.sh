@@ -4,7 +4,7 @@ set -e
 # === CONFIGURATION ===
 ENV_NAME="signal_sim_env"
 PY_VER="3.11"
-MAIN_SCRIPT="main.py"
+MAIN_SCRIPT="src/main.py"
 REQ_FILE="requirements.txt"
 
 echo "=========================================="
