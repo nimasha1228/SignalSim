@@ -66,3 +66,22 @@ pip install -r requirements.txt
 ```bash
 python main.py
 ```
+
+## **6. How to Change Simulation Settings**
+
+Simulation parameters can be modified in the **configuration file**, typically located at:
+
+```
+config/config.json
+```
+
+You can adjust these values to experiment with different simulation behaviors:
+
+- **`seed`** → Ensures reproducibility of random events  
+- **`strength_threshold`** → Signal strength required to trigger an order (set to 0.5 in the assessment)
+- **`latency_in_secs`** → Delay before order execution  (set to 1 second in the assessment)
+- **`open_order_size`** → Default order size per signal  (set to 1 in the assessment)
+- **`ca` / `cb`** → Coefficients defining price aggressiveness boundaries  
+- **`min_exec_prob_threshold`** → Minimum probability required for execution  
+- **`spread_penalty_factor`** → Penalizes orders in wide-spread markets  
+- **`commision_per_trade`** → Per-trade transaction cost applied in PnL calculations  
