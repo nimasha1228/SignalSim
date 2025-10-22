@@ -64,6 +64,7 @@ This will perform the same automated setup:
 ## **4. View the Results**
 
 - Plots are saved in: `../output/plots/`  
+- Logs are saved in: `../output/logs/`  
 - Reports and notebooks are available in: `report/`  
 - You can open the notebook to view simulation summaries and metrics.
 
